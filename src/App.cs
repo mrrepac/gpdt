@@ -59,11 +59,16 @@ internal sealed class MainForm : Form {
     bool exiting;
     bool captureWasEnabled, pausingCapture;
     Power power=new Power();
+    SavedPowerMode savedPower;
+    Label savedPowerStatus;
+    string savedPowerError;
     ManagementEventWatcher brightnessWatcher;
     string reportPath;
     readonly BrightnessFilter brightnessFilter=new BrightnessFilter();
     Label filterStatus;
     bool filterRunning;
+    readonly Stopwatch filterClock=Stopwatch.StartNew();
+    long nextFilterRetry=long.MaxValue, filterReadyDeadline;
     DateTime nextPowerRead=DateTime.MinValue;
     public MainForm(bool activateMappings=false, bool startInTray=false) {
         SuspendLayout();
@@ -73,6 +78,8 @@ internal sealed class MainForm : Form {
         StartPosition=FormStartPosition.CenterScreen;
         using(var iconStream=System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("gpdt.ico"))using(var embeddedIcon=new Icon(iconStream))Icon=(Icon)embeddedIcon.Clone(); BackColor=Ground; ForeColor=Ink;
         Directory.CreateDirectory(Path.Combine(root,"data")); reportPath=Path.Combine(root,"data","keyboard-diagnostic.log");
+        savedPower=new SavedPowerMode(Path.Combine(root,"data","power-mode.xml"));
+        try {savedPower.Load();}catch(Exception ex){savedPowerError="Сохранённый режим не загружен: "+ex.Message;}
         if(!File.Exists(Path.Combine(root,"data","bindings.xml")) && File.Exists(Path.Combine(root,"defaults","bindings.xml"))) {
             File.Copy(Path.Combine(root,"defaults","bindings.xml"),Path.Combine(root,"data","bindings.xml"));
             File.WriteAllText(Path.Combine(root,"data","brightness-copy-paste-v1"),"Release defaults initialized.");
@@ -97,6 +104,7 @@ internal sealed class MainForm : Form {
         menuMore.Items.Add("Настроить клавиши",null,delegate { pages.SelectedIndex=1; });
         menuMore.Items.Add("Настройки мощности",null,delegate { pages.SelectedIndex=2; });
         menuMore.Items.Add("Диагностика",null,delegate { pages.SelectedIndex=3; });
+        menuMore.Items.Add("Настройки запуска",null,delegate { ShowStartupSettings(); });
         menuMore.Items.Add(new ToolStripSeparator());
         menuMore.Items.Add("Отменить последний сброс",null,delegate { UndoReset(); });
         menuMore.Items.Add("Сбросить все назначения…",null,delegate { ResetBindings(true); });
@@ -191,8 +199,9 @@ internal sealed class MainForm : Form {
     }
     void ApplyPreset(int index,int slow,int fast) {
         try {
+            savedPower.CancelPending();
             if(!power.Ready)power.Open();else power.Refresh();
-            power.Apply(slow,fast);ShowPower("Лимиты применены.");PowerLog("preset "+index);
+            power.Apply(slow,fast);SavePowerMode();ShowPower("Режим применён и сохранён для следующих запусков.");PowerLog("preset "+index);
             pl1.Value=slow;pl2.Value=fast;
             nextPowerRead=DateTime.Now.AddSeconds(5);
         }catch(Exception ex){homePower.Text="Не удалось применить режим. Подробнее: Ещё → Настройки мощности.";Error(ex);}
@@ -236,6 +245,7 @@ internal sealed class MainForm : Form {
         var flow=Flow(); page.Controls.Add(flow);
         flow.Controls.Add(Info("Intel Core i3-N300  ·  лимиты мощности пакета процессора"));
         powerStatus=Info("Лимиты ещё не прочитаны. Для доступа используется подписанный драйвер PawnIO."); flow.Controls.Add(powerStatus);
+        savedPowerStatus=Info("");flow.Controls.Add(savedPowerStatus);ShowSavedPower();
         var actions=new FlowLayoutPanel{AutoSize=true,Width=750};
         actions.Controls.Add(Btn("Прочитать PL1 / PL2",delegate { ReadPower(); }));
         actions.Controls.Add(Btn("Установить PawnIO…",delegate { try { Process.Start(new ProcessStartInfo(File.Exists(Path.Combine(root,"drivers","PawnIO_setup.exe"))?Path.Combine(root,"drivers","PawnIO_setup.exe"):"https://github.com/namazso/PawnIO.Setup/releases/latest"){UseShellExecute=true,Verb="runas"}); } catch(Exception ex) { Error(ex); } }));
@@ -246,9 +256,9 @@ internal sealed class MainForm : Form {
         var presets=new FlowLayoutPanel{AutoSize=true,Width=750};
         presets.Controls.Add(Btn("Экономия: 6 / 8",delegate { pl1.Value=6;pl2.Value=8; })); presets.Controls.Add(Btn("Баланс: 10 / 13",delegate { pl1.Value=10;pl2.Value=13; })); presets.Controls.Add(Btn("Мощность: 15 / 15",delegate { pl1.Value=15;pl2.Value=15; })); flow.Controls.Add(presets);
         var commit=new FlowLayoutPanel{AutoSize=true,Width=750};
-        applyPower=Btn("Применить лимиты",delegate { try { power.Apply((double)pl1.Value,(double)pl2.Value); ShowPower("Запись MSR проверена. Фактическая мощность зависит также от BIOS и нагрузки."); PowerLog("apply"); } catch(Exception ex) { Error(ex); } }); applyPower.Enabled=false; commit.Controls.Add(applyPower);
-        commit.Controls.Add(Btn("Вернуть исходные",delegate { try { power.Restore();ShowPower("Исходные значения восстановлены.");PowerLog("restore"); } catch(Exception ex) { Error(ex); } })); flow.Controls.Add(commit);
-        flow.Controls.Add(Info("Профили заполняют поля; запись происходит только по кнопке «Применить». Диапазон этой версии — 6–15 Вт. Временные окна и остальные биты регистров сохраняются. Автоприменения при запуске нет."));
+        applyPower=Btn("Применить лимиты",delegate { try { savedPower.CancelPending();power.Apply((double)pl1.Value,(double)pl2.Value);SavePowerMode(); ShowPower("Лимиты применены и сохранены для следующих запусков."); PowerLog("apply"); } catch(Exception ex) { Error(ex); } }); applyPower.Enabled=false; commit.Controls.Add(applyPower);
+        commit.Controls.Add(Btn("Вернуть исходные",delegate { try { savedPower.Clear();savedPowerError=null;ShowSavedPower();power.Restore();ShowPower("Исходные значения восстановлены. Автоприменение отключено.");PowerLog("restore"); } catch(Exception ex) { Error(ex); } })); flow.Controls.Add(commit);
+        flow.Controls.Add(Info("Применённый режим сохраняется и восстанавливается при запуске, в том числе после перезагрузки. Здесь кнопки профилей только заполняют поля: нажмите «Применить лимиты». «Вернуть исходные» также отключает автоприменение. Диапазон — 6–15 Вт; остальные биты регистров сохраняются."));
         flow.Controls.Add(Info("Лимит мощности — не текущее потребление и не мощность всего компьютера. Дополнительные ограничения BIOS / MMIO могут оказаться ниже PL1 / PL2. gpdt не снимает блокировки BIOS."));
         flow.Controls.Add(Info("Если запись недоступна: BIOS → OEM System Configuration → Configurable TDP. Вход в BIOS MicroPC 2 — Backspace при включении."));
     }
@@ -262,13 +272,54 @@ internal sealed class MainForm : Form {
         actions.Controls.Add(Btn("Папка отчётов",delegate { Process.Start("explorer.exe",Path.Combine(root,"data")); })); layout.Controls.Add(actions,0,1);
         log=new TextBox{Multiline=true,ReadOnly=true,ScrollBars=ScrollBars.Both,Dock=DockStyle.Fill,Font=new Font("Consolas",9),WordWrap=false};layout.Controls.Add(log,0,2);
     }
+    void ShowStartupSettings() {
+        using(var dialog=new Form{Text="gpdt — настройки запуска",StartPosition=FormStartPosition.CenterParent,ClientSize=new Size(660,280),FormBorderStyle=FormBorderStyle.FixedDialog,MaximizeBox=false,MinimizeBox=false,Font=Font,BackColor=Ground,ForeColor=Ink}) {
+            var flow=Flow();dialog.Controls.Add(flow);
+            var startup=new CheckBox{Text="Запускать при входе в Windows",AutoSize=true,Margin=new Padding(5,14,5,8)};
+            var admin=new CheckBox{Text="С правами администратора (необходимо для работы кнопок)",AutoSize=true,Checked=true,Enabled=false,Margin=new Padding(5,8,5,8)};
+            flow.Controls.Add(startup);flow.Controls.Add(admin);
+            flow.Controls.Add(Info("При входе программа запускается в трее с включёнными переназначениями, без повторного запроса прав."));
+            var result=Info("");flow.Controls.Add(result);
+            try {startup.Checked=Autostart.IsEnabled();}
+            catch(Exception ex){result.Text="Не удалось прочитать автозапуск: "+ex.Message;startup.Enabled=false;}
+            bool updating=false;
+            startup.CheckedChanged+=delegate {
+                if(updating)return;
+                updating=true;
+                startup.Enabled=false;
+                try {Autostart.SetEnabled(startup.Checked);result.Text=startup.Checked?"Автозапуск включён для этой программы.":"Автозапуск этой программы выключен.";}
+                catch(Exception ex){result.Text="Не удалось изменить автозапуск: "+ex.Message;}
+                finally {try{startup.Checked=Autostart.IsEnabled();}catch{}startup.Enabled=true;updating=false;}
+            };
+            foreach(Control control in flow.Controls)control.MaximumSize=new Size(610,0);
+            Theme(dialog);dialog.ShowDialog(this);
+        }
+    }
     void PollPower() {
         nextPowerRead=DateTime.Now.AddSeconds(5);
-        try { if(!power.Ready)power.Open();else power.Refresh();ShowPower(""); }
-        catch(Exception ex) { applyPower.Enabled=false;powerStatus.Text=ex.Message;homePower.Text="Текущий режим недоступен · Ещё → Настройки мощности";foreach(var tile in powerTiles){tile.Marked=false;tile.Enabled=false;tile.Invalidate();} }
+        try {
+            if(!power.Ready)power.Open();else power.Refresh();
+            if(savedPower.ApplyPending((slow,fast)=>power.Apply(slow,fast))) {
+                pl1.Value=(decimal)power.PL1;pl2.Value=(decimal)power.PL2;
+                PowerLog("startup restore "+power.PL1+" / "+power.PL2);
+            }
+            ShowPower("");ShowSavedPower();
+        }
+        catch(Exception ex) { power.Dispose();applyPower.Enabled=false;powerStatus.Text=ex.Message;homePower.Text="Текущий режим недоступен · Ещё → Настройки мощности";ShowSavedPower();foreach(var tile in powerTiles){tile.Marked=false;tile.Enabled=false;tile.Invalidate();} }
+    }
+    void SavePowerMode() {
+        try {savedPower.Save(power.PL1,power.PL2);savedPowerError=null;}
+        catch(Exception ex){savedPowerError="Лимиты применены, но не сохранены: "+ex.Message;throw new IOException(savedPowerError,ex);}
+        finally {ShowSavedPower();}
+    }
+    void ShowSavedPower() {
+        if(savedPowerError!=null){savedPowerStatus.Text=savedPowerError;return;}
+        savedPowerStatus.Text=!savedPower.HasValue?"Автоприменение выключено. Выберите режим, чтобы сохранить его.":
+            string.Format("Сохранено для запуска: {0:0.#} / {1:0.#} Вт. {2}",savedPower.PL1,savedPower.PL2,savedPower.Pending?"Ожидание доступа к процессору; повтор каждые 5 секунд.":"Будет применено при следующем запуске.");
     }
     void Tick(object sender,EventArgs e) {
         if(DateTime.Now>=nextPowerRead)PollPower();
+        if(!exiting && enable.Checked && !filterRunning && filterClock.ElapsedMilliseconds>=nextFilterRetry)ConfigureFilter();
         if(filterRunning)try {
             bool wasBlocking=brightnessFilter.Blocking;
             foreach(int usage in brightnessFilter.Poll()) {
@@ -277,21 +328,29 @@ internal sealed class MainForm : Form {
                 if(binding!=null)SendChord(binding);
             }
             if(filterRunning) {
+                if(!brightnessFilter.Blocking && filterClock.ElapsedMilliseconds>=filterReadyDeadline)throw new IOException("Каналы кнопок яркости пока не готовы.");
                 filterStatus.Text=brightnessFilter.Blocking?"Фильтр активен: назначения работают без изменения яркости. Подавлено отчётов: "+brightnessFilter.Suppressed:"Подключение фильтра яркости… Каналы: "+brightnessFilter.Seen+"/3";
                 if(!wasBlocking && brightnessFilter.Blocking)Note("FILTER BLOCK: direct channels verified; brightness suppression active");
             }
-        }catch(Exception ex){brightnessFilter.Dispose();filterRunning=false;filterStatus.Text="Кнопки яркости работают штатно. "+ex.Message;Note("FILTER STOP: "+ex.Message);}
+        }catch(Exception ex){ScheduleFilterRetry(ex);}
         if(captureRow>=0 && DateTime.Now>captureUntil) { EndCapture();captureHint.Text="За 10 секунд клавиатурный код не получен. Проверьте вкладку «Диагностика»: возможен отдельный HID/ACPI-канал."; }
         if(monitorUntil!=DateTime.MinValue && DateTime.Now>monitorUntil) { monitorUntil=DateTime.MinValue; Note("=== AUTO STOP ===");status.Text="Диагностика завершена. Отчёт сохранён в data."; }
     }
     void ConfigureFilter() {
+        nextFilterRetry=long.MaxValue;
         brightnessFilter.Dispose();filterRunning=false;
-        if(!enable.Checked){filterStatus.Text="Фильтр выключен: штатная яркость работает.";return;}
+        if(exiting || !enable.Checked){filterStatus.Text="Фильтр выключен: штатная яркость работает.";return;}
         if(!new[]{0x6f,0x70}.All(u=>bindings.Any(b=>b.Verified && b.HidUsage==u && b.Target!=0))) {
             filterStatus.Text="Кнопки яркости работают штатно. Для подавления задайте действия обеим кнопкам.";return;
         }
-        try { brightnessFilter.Start();filterRunning=true;filterStatus.Text="Фильтр подключается автоматически. Нажимать кнопки для подготовки не нужно.";Note("FILTER CONNECT: automatic channel readiness"); }
-        catch(Exception ex){filterStatus.Text="Кнопки яркости работают штатно. "+ex.Message;Note("FILTER UNAVAILABLE: "+ex.Message);}
+        try { brightnessFilter.Start();filterRunning=true;filterReadyDeadline=filterClock.ElapsedMilliseconds+10000;filterStatus.Text="Фильтр подключается автоматически. Нажимать кнопки для подготовки не нужно.";Note("FILTER CONNECT: automatic channel readiness"); }
+        catch(Exception ex){ScheduleFilterRetry(ex);}
+    }
+    void ScheduleFilterRetry(Exception error) {
+        brightnessFilter.Dispose();filterRunning=false;
+        nextFilterRetry=filterClock.ElapsedMilliseconds+3000;
+        filterStatus.Text="Кнопки яркости работают штатно. Повтор подключения через 3 с. "+error.Message;
+        Note("FILTER RETRY: "+error.Message);
     }
     bool Recording { get { return DateTime.Now<monitorUntil || (captureRow>=0 && DateTime.Now<captureUntil); } }
     void BeginCapture() { if(grid.CurrentRow==null)return;if(bindings[grid.CurrentRow.Index].HidUsage!=0){captureHint.Text="Эта HID-кнопка уже определена. Выберите назначение и нажмите «Сохранить и включить».";return;}if(captureRow>=0)EndCapture();captureWasEnabled=enable.Checked;pausingCapture=true;enable.Checked=false;pausingCapture=false;captureRow=grid.CurrentRow.Index;captureUntil=DateTime.Now.AddSeconds(10);captureHint.Text="Нажмите один раз: "+bindings[captureRow].Name+". Ожидание 10 секунд…";Note("CAPTURE "+bindings[captureRow].Name); }
@@ -477,6 +536,11 @@ internal sealed class DashboardButton : Button {
 
 internal static class Program {
     [STAThread] static void Main(string[] args) {
+        if(args.Contains("--install-startup") || args.Contains("--remove-startup")) {
+            try {Autostart.SetEnabled(args.Contains("--install-startup"));}
+            catch(Exception ex){MessageBox.Show(ex.Message,"gpdt — автозапуск");Environment.ExitCode=1;}
+            return;
+        }
         if(args.Contains("--self-test")) { SelfTest();return; }
         if(args.Contains("--power-probe")) { Probe();return; }
         if(args.Contains("--power-test")) { TestPower();return; }

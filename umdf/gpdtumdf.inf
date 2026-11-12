@@ -4,7 +4,7 @@ Class=Extension
 ClassGuid={e2f84ce7-8efa-411c-aa69-97454ca4cb57}
 ExtensionId={66f31c1c-6fd4-4f52-b659-c7b6063e21c2}
 Provider=%Provider%
-DriverVer=11/12/2026,0.3.0.1
+DriverVer=11/12/2026,0.3.0.2
 CatalogFile=gpdtumdf.cat
 PnpLockdown=1
 [Manufacturer]

@@ -9,4 +9,4 @@
 *.cer binary
 *.bin binary
 *.zip binary
-/umdf/package/gpdtumdf.inf -text
+/umdf/package/gpdtumdf.inf -text whitespace=cr-at-eol

@@ -91,7 +91,7 @@ internal sealed class BrightnessFilter : IDisposable {
             if(returned!=56 || BitConverter.ToUInt32(data,0)!=3)throw new IOException("UMDF protocol mismatch");
             uint mode=BitConverter.ToUInt32(data,4),attached=BitConverter.ToUInt32(data,8);
             Seen|=BitConverter.ToUInt32(data,12);Suppressed+=BitConverter.ToUInt64(data,32);
-            if(attached!=(1u<<i) || mode==0 || (Blocking && mode!=2))throw new IOException("Связь с UMDF-фильтром прервана. Перезапустите переназначения.");
+            if(attached!=(1u<<i) || mode==0 || (Blocking && mode!=2))throw new IOException("Связь с UMDF-фильтром прервана.");
         }
         lock(gate) {
             // Protocol v2 verifies queued owner reads, without physical calibration.

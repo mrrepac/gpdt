@@ -3,6 +3,7 @@ using System.IO;
 using System.Text;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
+using System.Xml.Serialization;
 using Microsoft.Win32.SafeHandles;
 
 internal sealed class Power : IDisposable {
@@ -39,7 +40,7 @@ internal sealed class Power : IDisposable {
     public ulong Read(uint msr) { return BitConverter.ToUInt64(Execute("ioctl_read_msr",new ulong[]{msr},8),0); }
     void Write(ulong value) { Execute("ioctl_write_msr",new ulong[]{0x610,value},0); }
     public static ulong WithLimits(ulong old,double unit,double pl1,double pl2) {
-        if(unit<=0 || pl1<6 || pl1>15 || pl2<pl1 || pl2>15) throw new ArgumentOutOfRangeException("limits","Допустимо 6–15 Вт, PL2 ≥ PL1.");
+        if(double.IsNaN(unit) || double.IsInfinity(unit) || double.IsNaN(pl1) || double.IsInfinity(pl1) || double.IsNaN(pl2) || double.IsInfinity(pl2) || unit<=0 || pl1<6 || pl1>15 || pl2<pl1 || pl2>15) throw new ArgumentOutOfRangeException("limits","Допустимо 6–15 Вт, PL2 ≥ PL1.");
         ulong mask=0x7fffUL|(0x7fffUL<<32);
         return (old&~mask)|((ulong)Math.Round(pl1/unit)&0x7fff)|(((ulong)Math.Round(pl2/unit)&0x7fff)<<32);
     }
@@ -59,4 +60,49 @@ internal sealed class Power : IDisposable {
     }
     public void Refresh() { if(Ready) { Current=Read(0x610); Locked=(Current&(1UL<<63))!=0; } }
     public void Dispose() { Ready=false; if(handle!=null) { handle.Dispose(); handle=null; } }
+}
+
+public sealed class SavedPowerValues {
+    public int Version=1;
+    public double PL1,PL2;
+}
+
+internal sealed class SavedPowerMode {
+    readonly string path;
+    SavedPowerValues values;
+    public bool Pending { get; private set; }
+    public bool HasValue { get { return values!=null; } }
+    public double PL1 { get { return values.PL1; } }
+    public double PL2 { get { return values.PL2; } }
+    public SavedPowerMode(string file) { path=file; }
+    public void Load() {
+        values=null;Pending=false;
+        if(!File.Exists(path))return;
+        SavedPowerValues loaded;
+        using(var stream=File.OpenRead(path))loaded=(SavedPowerValues)new XmlSerializer(typeof(SavedPowerValues)).Deserialize(stream);
+        if(loaded==null || loaded.Version!=1)throw new IOException("Неизвестный формат сохранённого режима мощности.");
+        Power.WithLimits(0,0.125,loaded.PL1,loaded.PL2);
+        values=loaded;Pending=true;
+    }
+    public void CancelPending() { Pending=false; }
+    public void Save(double slow,double fast) {
+        Power.WithLimits(0,0.125,slow,fast);
+        var selected=new SavedPowerValues{PL1=slow,PL2=fast};
+        string temp=path+"."+Guid.NewGuid().ToString("N")+".tmp";
+        try {
+            using(var stream=File.Create(temp))new XmlSerializer(typeof(SavedPowerValues)).Serialize(stream,selected);
+            if(File.Exists(path))File.Replace(temp,path,null);else File.Move(temp,path);
+            values=selected;Pending=false;
+        }finally {if(File.Exists(temp))File.Delete(temp);}
+    }
+    public bool ApplyPending(Action<double,double> apply) {
+        if(!Pending)return false;
+        apply(values.PL1,values.PL2);
+        Pending=false;return true;
+    }
+    public void Clear() {
+        Pending=false;
+        if(File.Exists(path))File.Delete(path);
+        values=null;
+    }
 }
