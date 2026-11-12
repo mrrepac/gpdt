@@ -1,0 +1,52 @@
+[Version]
+Signature="$WINDOWS NT$"
+Class=Extension
+ClassGuid={e2f84ce7-8efa-411c-aa69-97454ca4cb57}
+ExtensionId={66f31c1c-6fd4-4f52-b659-c7b6063e21c2}
+Provider=%Provider%
+DriverVer=11/12/2026,0.3.0.1
+CatalogFile=gpdtumdf.cat
+PnpLockdown=1
+[Manufacturer]
+%Provider%=Models,NTamd64.10.0...22000
+[Models.NTamd64.10.0...22000]
+%Up%=Install,HID\INTC816&Col0D
+%Down%=Install,HID\INTC816&Col0E
+[DestinationDirs]
+DriverCopy=13
+[SourceDisksNames]
+1=%Disk%,,,
+[SourceDisksFiles]
+gpdtumdf.dll=1
+[Install.NT]
+CopyFiles=DriverCopy
+Include=WUDFRD.inf
+Needs=WUDFRD_UpperFilter.NT
+[Install.NT.HW]
+Include=WUDFRD.inf
+Needs=WUDFRD_UpperFilter.NT.HW
+[Install.NT.Services]
+Include=WUDFRD.inf
+Needs=WUDFRD_UpperFilter.NT.Services
+[Install.NT.Filters]
+Include=WUDFRD.inf
+Needs=WUDFRD_UpperFilter.NT.Filters
+[Install.NT.Wdf]
+UmdfService=gpdtumdf,UMService
+UmdfServiceOrder=gpdtumdf
+UmdfImpersonationLevel=Identification
+UmdfKernelModeClientPolicy=AllowKernelModeClients
+UmdfFileObjectPolicy=AllowNullAndUnknownFileObjects
+UmdfMethodNeitherAction=Copy
+UmdfFsContextUsePolicy=CanUseFsContext2
+[UMService]
+UmdfLibraryVersion=2.33.0
+ServiceBinary=%13%\gpdtumdf.dll
+[DriverCopy]
+gpdtumdf.dll
+[Strings]
+Provider="gpdt local development"
+Disk="gpdt UMDF brightness filter"
+Up="gpdt UMDF: GPD brightness up"
+Down="gpdt UMDF: GPD brightness down"
+

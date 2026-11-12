@@ -1,0 +1,14 @@
+/data/
+/work/
+/dist/
+/*.exe
+/driver/
+/drivers/PawnIO_setup.exe
+/umdf/package/*.obj
+/umdf/package/*.exp
+/umdf/package/*.lib
+*.pfx
+*.p12
+*.key
+*.tmp
+*.log

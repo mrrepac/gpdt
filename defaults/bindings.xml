@@ -1,0 +1,126 @@
+<?xml version="1.0"?>
+<ArrayOfBinding xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <Binding>
+    <Name>Esc</Name>
+    <Vk>0</Vk>
+    <Scan>0</Scan>
+    <Extended>false</Extended>
+    <Verified>false</Verified>
+    <Target>0</Target>
+    <Ctrl>false</Ctrl>
+    <Alt>false</Alt>
+    <Shift>false</Shift>
+    <Win>false</Win>
+    <HidUsage>0</HidUsage>
+  </Binding>
+  <Binding>
+    <Name>Яркость −</Name>
+    <Vk>0</Vk>
+    <Scan>0</Scan>
+    <Extended>false</Extended>
+    <Verified>true</Verified>
+    <Target>67</Target>
+    <Ctrl>true</Ctrl>
+    <Alt>false</Alt>
+    <Shift>false</Shift>
+    <Win>false</Win>
+    <Evidence>Physical HID diagnostic 2026-11-12</Evidence>
+    <HidUsage>112</HidUsage>
+    <DeviceMatch>HID#INTC816&amp;Col0E#</DeviceMatch>
+  </Binding>
+  <Binding>
+    <Name>Яркость +</Name>
+    <Vk>0</Vk>
+    <Scan>0</Scan>
+    <Extended>false</Extended>
+    <Verified>true</Verified>
+    <Target>86</Target>
+    <Ctrl>true</Ctrl>
+    <Alt>false</Alt>
+    <Shift>false</Shift>
+    <Win>false</Win>
+    <Evidence>Physical HID diagnostic 2026-11-12</Evidence>
+    <HidUsage>111</HidUsage>
+    <DeviceMatch>HID#INTC816&amp;Col0D#</DeviceMatch>
+  </Binding>
+  <Binding>
+    <Name>Без звука</Name>
+    <Vk>173</Vk>
+    <Scan>32</Scan>
+    <Extended>true</Extended>
+    <Verified>true</Verified>
+    <Target>115</Target>
+    <Ctrl>false</Ctrl>
+    <Alt>true</Alt>
+    <Shift>false</Shift>
+    <Win>false</Win>
+    <Evidence>Keyboard hook</Evidence>
+    <HidUsage>0</HidUsage>
+  </Binding>
+  <Binding>
+    <Name>Громкость −</Name>
+    <Vk>174</Vk>
+    <Scan>46</Scan>
+    <Extended>true</Extended>
+    <Verified>true</Verified>
+    <Target>0</Target>
+    <Ctrl>false</Ctrl>
+    <Alt>false</Alt>
+    <Shift>false</Shift>
+    <Win>false</Win>
+    <Evidence>Keyboard hook</Evidence>
+    <HidUsage>0</HidUsage>
+  </Binding>
+  <Binding>
+    <Name>Громкость +</Name>
+    <Vk>0</Vk>
+    <Scan>0</Scan>
+    <Extended>false</Extended>
+    <Verified>false</Verified>
+    <Target>0</Target>
+    <Ctrl>false</Ctrl>
+    <Alt>false</Alt>
+    <Shift>false</Shift>
+    <Win>false</Win>
+    <HidUsage>0</HidUsage>
+  </Binding>
+  <Binding>
+    <Name>Insert</Name>
+    <Vk>0</Vk>
+    <Scan>0</Scan>
+    <Extended>false</Extended>
+    <Verified>false</Verified>
+    <Target>0</Target>
+    <Ctrl>false</Ctrl>
+    <Alt>false</Alt>
+    <Shift>false</Shift>
+    <Win>false</Win>
+    <HidUsage>0</HidUsage>
+  </Binding>
+  <Binding>
+    <Name>Print Screen</Name>
+    <Vk>0</Vk>
+    <Scan>0</Scan>
+    <Extended>false</Extended>
+    <Verified>false</Verified>
+    <Target>0</Target>
+    <Ctrl>false</Ctrl>
+    <Alt>false</Alt>
+    <Shift>false</Shift>
+    <Win>false</Win>
+    <HidUsage>0</HidUsage>
+  </Binding>
+  <Binding>
+    <Name>Delete</Name>
+    <Vk>0</Vk>
+    <Scan>0</Scan>
+    <Extended>false</Extended>
+    <Verified>false</Verified>
+    <Target>0</Target>
+    <Ctrl>false</Ctrl>
+    <Alt>false</Alt>
+    <Shift>false</Shift>
+    <Win>false</Win>
+    <HidUsage>0</HidUsage>
+  </Binding>
+</ArrayOfBinding>
